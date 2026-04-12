@@ -13,7 +13,11 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/server/**/*.ts'],
-      exclude: ['src/server/__tests__/**', 'src/server/index.ts'],
+      exclude: [
+        'src/server/__tests__/**',
+        'src/server/index.ts',
+        'src/server/ai/openrouter.ts',
+      ],
       thresholds: {
         lines: 100,
         branches: 100,

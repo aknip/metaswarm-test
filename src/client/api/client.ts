@@ -1,4 +1,4 @@
-import type { Todo } from '@shared/types.js';
+import type { Todo, ChatMessage, ChatResponse } from '@shared/types.js';
 
 const BASE = '/api';
 
@@ -39,4 +39,16 @@ export async function updateTodo(id: string, title: string): Promise<Todo> {
 export async function deleteTodo(id: string): Promise<void> {
   const res = await fetch(`${BASE}/todos/${id}`, { method: 'DELETE' });
   if (!res.ok && res.status !== 404) throw new Error('Failed to delete todo');
+}
+
+export async function sendChatMessage(
+  messages: ChatMessage[]
+): Promise<ChatResponse> {
+  const res = await fetch(`${BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages }),
+  });
+  if (!res.ok) throw new Error('Failed to send message');
+  return res.json();
 }

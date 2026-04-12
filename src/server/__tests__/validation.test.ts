@@ -1,7 +1,79 @@
 import { describe, it, expect } from 'vitest';
-import { validateCreateTodo, validateUpdateTodo } from '../validation.js';
+import {
+  validateCreateTodo,
+  validateUpdateTodo,
+  validateUUID,
+  validateChatMessages,
+} from '../validation.js';
 
 describe('Input Validation (UC-S11)', () => {
+  describe('validateUUID (UC-S11)', () => {
+    it('accepts valid UUID v4', () => {
+      expect(validateUUID('550e8400-e29b-41d4-a716-446655440000')).toBe(
+        '550e8400-e29b-41d4-a716-446655440000'
+      );
+    });
+
+    it('rejects invalid UUID format', () => {
+      expect(() => validateUUID('not-a-uuid')).toThrow('Invalid ID format');
+    });
+  });
+
+  describe('validateChatMessages (UC-S11, for UC-S08)', () => {
+    it('accepts valid messages', () => {
+      const result = validateChatMessages({
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+      expect(result.messages).toHaveLength(1);
+    });
+
+    it('rejects missing messages field', () => {
+      expect(() => validateChatMessages({})).toThrow(
+        'Messages array is required'
+      );
+    });
+
+    it('rejects empty messages array', () => {
+      expect(() => validateChatMessages({ messages: [] })).toThrow(
+        'Messages array must not be empty'
+      );
+    });
+
+    it('rejects more than 50 messages', () => {
+      const messages = Array.from({ length: 51 }, (_, i) => ({
+        role: 'user',
+        content: `msg ${i}`,
+      }));
+      expect(() => validateChatMessages({ messages })).toThrow(
+        'Messages array must not exceed 50 messages'
+      );
+    });
+
+    it('rejects invalid role', () => {
+      expect(() =>
+        validateChatMessages({
+          messages: [{ role: 'system', content: 'hi' }],
+        })
+      ).toThrow('Invalid message role');
+    });
+
+    it('rejects empty content', () => {
+      expect(() =>
+        validateChatMessages({
+          messages: [{ role: 'user', content: '' }],
+        })
+      ).toThrow('Message content must be a non-empty string');
+    });
+
+    it('rejects non-string content', () => {
+      expect(() =>
+        validateChatMessages({
+          messages: [{ role: 'user', content: 123 }],
+        })
+      ).toThrow('Message content must be a non-empty string');
+    });
+  });
+
   describe('validateCreateTodo (UC-S11, Main Flow)', () => {
     it('accepts valid title (UC-S11, Main Flow)', () => {
       const result = validateCreateTodo({ title: 'Buy milk' });

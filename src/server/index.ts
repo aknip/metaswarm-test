@@ -5,6 +5,7 @@ import { createDatabase } from './db.js';
 import { SSEManager } from './sse.js';
 import { todosRoutes } from './routes/todos.js';
 import { eventsRoutes } from './routes/events.js';
+import { chatRoutes } from './routes/chat.js';
 
 const app = new Hono();
 const db = new Database('todos.db');
@@ -13,6 +14,7 @@ createDatabase(db);
 const sseManager = new SSEManager();
 todosRoutes(app, db, sseManager);
 eventsRoutes(app, sseManager);
+chatRoutes(app, db, sseManager);
 
 const port = Number(process.env.PORT) || 3000;
 serve({ fetch: app.fetch, port }, () => {

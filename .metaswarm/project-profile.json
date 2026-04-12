@@ -1,0 +1,77 @@
+{
+  "name": "metaswarm-test",
+  "description": "Real-time todo list application with AI chat integration",
+  "version": "1.0.0",
+  "type": "fullstack",
+  "language": "typescript",
+  "packageManager": "npm",
+  "moduleSystem": "esm",
+  "stack": {
+    "backend": {
+      "runtime": "node",
+      "framework": "hono",
+      "server": "@hono/node-server",
+      "database": "better-sqlite3",
+      "realtime": "sse"
+    },
+    "frontend": {
+      "framework": "react",
+      "version": "19",
+      "bundler": "vite",
+      "styling": "css"
+    },
+    "shared": {
+      "types": "src/shared/types.ts"
+    }
+  },
+  "testing": {
+    "unit": {
+      "runner": "vitest",
+      "coverageProvider": "v8",
+      "coverageThresholds": {
+        "lines": 80,
+        "branches": 80,
+        "functions": 80,
+        "statements": 80
+      }
+    },
+    "e2e": {
+      "runner": "playwright",
+      "browsers": ["chromium"]
+    }
+  },
+  "quality": {
+    "linter": "eslint",
+    "formatter": "prettier",
+    "typecheck": true,
+    "strict": true
+  },
+  "ci": {
+    "provider": "github-actions",
+    "workflow": ".github/workflows/ci.yml"
+  },
+  "commands": {
+    "dev": "npm run dev",
+    "dev:client": "npm run dev:client",
+    "build": "npm run build",
+    "test": "npm test",
+    "test:watch": "npm run test:watch",
+    "test:cov": "npm run test:cov",
+    "test:e2e": "npm run test:e2e",
+    "lint": "npm run lint",
+    "format": "npm run format",
+    "typecheck": "npm run typecheck"
+  },
+  "paths": {
+    "source": "src/",
+    "server": "src/server/",
+    "client": "src/client/",
+    "shared": "src/shared/",
+    "tests": "src/server/__tests__/",
+    "e2e": "e2e/",
+    "dist": "dist/"
+  },
+  "externalTools": [],
+  "createdAt": "2026-04-12",
+  "setupVersion": "4.0"
+}

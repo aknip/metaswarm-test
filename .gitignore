@@ -27,6 +27,10 @@ coverage/
 *.sqlite
 *.sqlite3
 
+# Playwright
+test-results/
+playwright-report/
+
 # Logs
 *.log
 npm-debug.log*

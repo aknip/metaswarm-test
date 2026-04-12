@@ -1,0 +1,50 @@
+{
+  "project": {
+    "name": "metaswarm-test",
+    "description": "Full-stack application with Node.js + Hono backend, React + Vite frontend, SQLite database, SSE real-time, and Claude SDK integration",
+    "type": "fullstack-web"
+  },
+  "stack": {
+    "language": "typescript",
+    "runtime": "node",
+    "packageManager": "npm",
+    "backend": {
+      "framework": "hono",
+      "database": "sqlite",
+      "realtime": "sse"
+    },
+    "frontend": {
+      "framework": "react",
+      "bundler": "vite"
+    },
+    "ai": {
+      "sdk": "@anthropic-ai/sdk",
+      "provider": "anthropic"
+    }
+  },
+  "testing": {
+    "runner": "vitest",
+    "coverageThreshold": 80,
+    "coverageProvider": "v8"
+  },
+  "quality": {
+    "linter": "eslint",
+    "formatter": "prettier",
+    "typeCheck": true
+  },
+  "ci": {
+    "provider": "github-actions",
+    "autofix": true
+  },
+  "metaswarm": {
+    "version": "plugin",
+    "setupDate": "2026-04-12",
+    "externalTools": [],
+    "features": {
+      "orchestratedExecution": true,
+      "adversarialReview": true,
+      "prShepherd": true,
+      "knowledgeBase": true
+    }
+  }
+}

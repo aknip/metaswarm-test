@@ -24,12 +24,18 @@ coverage/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
 # Logs
 *.log
 npm-debug.log*
+
+# Playwright
+playwright-report/
+test-results/
 
 # Vite
 vite.config.ts.timestamp-*

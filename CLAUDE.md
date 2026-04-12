@@ -7,7 +7,7 @@ Real-time todo list application with AI chat integration.
 - **Backend:** Node.js + Hono, SQLite (better-sqlite3), SSE for real-time
 - **Frontend:** React 19 + Vite 6
 - **Language:** TypeScript (strict mode, ESM)
-- **AI:** Anthropic Claude SDK with tool_use
+- **AI:** OpenRouter API (OpenAI-compatible)
 
 ## Project Structure
 
@@ -50,7 +50,7 @@ npm run typecheck     # TypeScript type checking
 
 - **Unit tests:** Vitest with v8 coverage. Tests live in `src/server/__tests__/`.
 - **E2E tests:** Playwright with Chromium. Tests live in `e2e/`.
-- **Coverage thresholds:** 80% lines, branches, functions, statements.
+- **Coverage thresholds:** 100% lines, branches, functions, statements.
 - Write tests for all new server-side code. Use TDD when possible.
 
 ### Code Style

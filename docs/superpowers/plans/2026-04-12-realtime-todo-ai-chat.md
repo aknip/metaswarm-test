@@ -713,6 +713,14 @@ test.describe('Todo CRUD (UC-U01, UC-U02, UC-U03, UC-U04)', () => {
 });
 ```
 
+- [ ] **5.1b: Run E2E tests to verify they fail (TDD red phase)**
+
+```bash
+npm run test:e2e
+```
+
+Expected: FAIL — no frontend exists yet, page cannot load.
+
 - [ ] **5.2: Create client entry HTML**
 
 Create `src/client/index.html`:
@@ -1242,7 +1250,7 @@ Expected: FAIL — `validation.js` module not found, POST route not implemented.
 
 - [ ] **2.1: Create src/server/validation.ts**
 
-Create `src/server/validation.ts`:
+Create `src/server/validation.ts` (ONLY `validateCreateTodo` — other validators added in their respective tasks per TDD):
 
 ```typescript
 export function validateCreateTodo(body: unknown): { title: string } {
@@ -1258,71 +1266,6 @@ export function validateCreateTodo(body: unknown): { title: string } {
     throw new Error('Title must be 500 characters or less');
   }
   return { title: obj.title.trim() };
-}
-
-export function validateUpdateTodo(
-  body: unknown
-): { title?: string; completed?: boolean } {
-  const obj = body as Record<string, unknown>;
-  const result: { title?: string; completed?: boolean } = {};
-
-  if (obj.title !== undefined) {
-    if (typeof obj.title !== 'string' || obj.title.trim().length === 0) {
-      throw new Error('Title is required');
-    }
-    if (obj.title.trim().length > 500) {
-      throw new Error('Title must be 500 characters or less');
-    }
-    result.title = obj.title.trim();
-  }
-
-  if (obj.completed !== undefined) {
-    if (typeof obj.completed !== 'boolean') {
-      throw new Error('Completed must be a boolean');
-    }
-    result.completed = obj.completed;
-  }
-
-  if (result.title === undefined && result.completed === undefined) {
-    throw new Error('No fields to update');
-  }
-
-  return result;
-}
-
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function validateUUID(id: string): string {
-  if (!UUID_REGEX.test(id)) {
-    throw new Error('Invalid ID format');
-  }
-  return id;
-}
-
-export function validateChatMessages(
-  body: unknown
-): { messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
-  const obj = body as Record<string, unknown>;
-  if (!obj || !Array.isArray(obj.messages)) {
-    throw new Error('Messages array is required');
-  }
-  if (obj.messages.length === 0) {
-    throw new Error('Messages array must not be empty');
-  }
-  if (obj.messages.length > 50) {
-    throw new Error('Messages array must not exceed 50 messages');
-  }
-  for (const msg of obj.messages) {
-    const m = msg as Record<string, unknown>;
-    if (m.role !== 'user' && m.role !== 'assistant') {
-      throw new Error('Invalid message role');
-    }
-    if (typeof m.content !== 'string' || m.content.trim().length === 0) {
-      throw new Error('Message content must be a non-empty string');
-    }
-  }
-  return obj as { messages: Array<{ role: 'user' | 'assistant'; content: string }> };
 }
 ```
 
@@ -1691,9 +1634,45 @@ Import `validateUpdateTodo` at the top of the file.
 npm test
 ```
 
-Expected: FAIL — PATCH routes not implemented.
+Expected: FAIL — `validateUpdateTodo` not exported from `validation.ts`, PATCH routes not implemented.
 
-### Step 2: Implement PATCH routes
+### Step 2: Implement validateUpdateTodo + PATCH routes
+
+- [ ] **2.0: Add validateUpdateTodo to validation.ts (TDD — tests written in 1.2)**
+
+Add to `src/server/validation.ts`:
+
+```typescript
+export function validateUpdateTodo(
+  body: unknown
+): { title?: string; completed?: boolean } {
+  const obj = body as Record<string, unknown>;
+  const result: { title?: string; completed?: boolean } = {};
+
+  if (obj.title !== undefined) {
+    if (typeof obj.title !== 'string' || obj.title.trim().length === 0) {
+      throw new Error('Title is required');
+    }
+    if (obj.title.trim().length > 500) {
+      throw new Error('Title must be 500 characters or less');
+    }
+    result.title = obj.title.trim();
+  }
+
+  if (obj.completed !== undefined) {
+    if (typeof obj.completed !== 'boolean') {
+      throw new Error('Completed must be a boolean');
+    }
+    result.completed = obj.completed;
+  }
+
+  if (result.title === undefined && result.completed === undefined) {
+    throw new Error('No fields to update');
+  }
+
+  return result;
+}
+```
 
 - [ ] **2.1: Add PATCH and toggle routes to todos.ts**
 
@@ -1755,7 +1734,7 @@ interface TodoItemProps {
   todo: Todo;
   onToggle: (id: string) => void;
   onUpdate: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;  // Optional — added in Task 4
 }
 
 export function TodoItem({ todo, onToggle, onUpdate, onDelete }: TodoItemProps) {
@@ -1809,13 +1788,15 @@ export function TodoItem({ todo, onToggle, onUpdate, onDelete }: TodoItemProps) 
           {todo.title}
         </span>
       )}
-      <button
-        className="delete-btn"
-        onClick={() => onDelete(todo.id)}
-        aria-label={`Delete ${todo.title}`}
-      >
-        x
-      </button>
+      {onDelete && (
+        <button
+          className="delete-btn"
+          onClick={() => onDelete(todo.id)}
+          aria-label={`Delete ${todo.title}`}
+        >
+          x
+        </button>
+      )}
     </li>
   );
 }
@@ -1887,7 +1868,7 @@ Replace the `<ul>` section in `TodoList` with:
 </ul>
 ```
 
-Add `onToggle`, `onUpdate`, `onDelete` to the props interface.
+Add `onToggle`, `onUpdate` to the props interface (required). Add `onDelete?` as optional — it will be wired in Task 4.
 
 - [ ] **3.5: Update App.tsx to wire toggle/update/delete**
 
@@ -1906,7 +1887,7 @@ export function App() {
           onTodoCreated={addTodo}
           onToggle={toggleTodo}
           onUpdate={updateTodo}
-          onDelete={() => {}} // Placeholder until Task 4
+          // onDelete added in Task 4
         />
       </div>
     </div>
@@ -2092,10 +2073,6 @@ export async function deleteTodo(id: string): Promise<void> {
   };
 ```
 
-- [ ] **3.3: Wire deleteTodo in App.tsx**
-
-Replace `onDelete={() => {}}` with `onDelete={deleteTodo}`.
-
 - [ ] **3.4: Add delete E2E test**
 
 Add to `e2e/todo-crud.spec.ts`:
@@ -2115,7 +2092,19 @@ Add to `e2e/todo-crud.spec.ts`:
   });
 ```
 
-- [ ] **3.5: Run E2E tests**
+- [ ] **3.4b: Run E2E tests to verify they fail (TDD red phase)**
+
+```bash
+npm run test:e2e
+```
+
+Expected: FAIL — delete button not yet wired (onDelete not passed to TodoList/TodoItem).
+
+- [ ] **3.5: Wire deleteTodo in App.tsx and pass onDelete to TodoList**
+
+Pass `onDelete={deleteTodo}` to TodoList. In TodoList, pass `onDelete` to each TodoItem.
+
+- [ ] **3.6: Run E2E tests**
 
 ```bash
 npm run test:e2e
@@ -2123,7 +2112,7 @@ npm run test:e2e
 
 Expected: PASS.
 
-- [ ] **3.6: Commit Task 4**
+- [ ] **3.7: Commit Task 4**
 
 ```bash
 git add -A
@@ -2641,6 +2630,14 @@ describe('AI Tool Execution (UC-S09)', () => {
       expect(result).toContain('Unknown tool');
     });
   });
+
+  describe('malformed arguments (UC-S09, Alt 5b)', () => {
+    it('throws on invalid JSON arguments', async () => {
+      await expect(
+        executeTool(db, sseManager, 'create_todo', 'not json')
+      ).rejects.toThrow();
+    });
+  });
 });
 ```
 
@@ -2749,6 +2746,21 @@ describe('Chat Routes (UC-S08)', () => {
     expect(body.response).toBe('You have no todos yet!');
   });
 
+  it('returns 500 when OPENROUTER_API_KEY is not set (UC-S08, Alt 5a)', async () => {
+    mockCallOpenRouter.mockRejectedValueOnce(
+      new Error('AI service not configured')
+    );
+
+    const res = await app.request('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'Hello' }],
+      }),
+    });
+    expect(res.status).toBe(502);
+  });
+
   it('returns 400 for empty messages (UC-S08, validation)', async () => {
     const res = await app.request('/api/chat', {
       method: 'POST',
@@ -2820,6 +2832,49 @@ npm test
 Expected: FAIL — ai modules and chat route don't exist.
 
 ### Step 2: Implement AI tools + OpenRouter client + chat route
+
+- [ ] **2.0a: Add validateChatMessages and validateUUID to validation.ts (TDD — tests in Task 7)**
+
+Add to `src/server/validation.ts`:
+
+```typescript
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function validateUUID(id: string): string {
+  if (!UUID_REGEX.test(id)) {
+    throw new Error('Invalid ID format');
+  }
+  return id;
+}
+
+export function validateChatMessages(
+  body: unknown
+): { messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
+  const obj = body as Record<string, unknown>;
+  if (!obj || !Array.isArray(obj.messages)) {
+    throw new Error('Messages array is required');
+  }
+  if (obj.messages.length === 0) {
+    throw new Error('Messages array must not be empty');
+  }
+  if (obj.messages.length > 50) {
+    throw new Error('Messages array must not exceed 50 messages');
+  }
+  for (const msg of obj.messages) {
+    const m = msg as Record<string, unknown>;
+    if (m.role !== 'user' && m.role !== 'assistant') {
+      throw new Error('Invalid message role');
+    }
+    if (typeof m.content !== 'string' || m.content.trim().length === 0) {
+      throw new Error('Message content must be a non-empty string');
+    }
+  }
+  return obj as { messages: Array<{ role: 'user' | 'assistant'; content: string }> };
+}
+```
+
+Note: These validators are implemented here because chat.ts imports them. Their unit tests are written in Task 7 (coverage hardening) to cover all branches. The chat.test.ts tests validate the integration.
 
 - [ ] **2.1: Create src/server/ai/openrouter.ts**
 
@@ -3377,6 +3432,49 @@ test.describe('AI Chat (UC-U06, UC-U07, UC-U08, UC-U09)', () => {
     await expect(page.getByText('buy groceries', { exact: false })).toBeVisible({
       timeout: 10000,
     });
+  });
+
+  test('AI lists todos when asked (UC-U09, Main Flow)', async ({
+    page,
+  }) => {
+    // First create a todo manually
+    const todoInput = page.getByPlaceholder('Add a todo...');
+    await todoInput.fill('Test item');
+    await todoInput.press('Enter');
+    await expect(page.getByText('Test item')).toBeVisible();
+
+    // Ask AI to list todos
+    const chatInput = page.getByPlaceholder('Type a message...');
+    await chatInput.fill("What's on my todo list?");
+    await chatInput.press('Enter');
+
+    // AI should mention the existing todo
+    await expect(
+      page.locator('.chat-message.assistant').last()
+    ).toContainText(/test item/i, { timeout: 30000 });
+  });
+
+  test('AI toggles a todo when asked (UC-U08, Main Flow - toggle)', async ({
+    page,
+  }) => {
+    // Create a todo manually
+    const todoInput = page.getByPlaceholder('Add a todo...');
+    await todoInput.fill('Mark me done');
+    await todoInput.press('Enter');
+    await expect(page.getByText('Mark me done')).toBeVisible();
+
+    // Ask AI to mark it complete
+    const chatInput = page.getByPlaceholder('Type a message...');
+    await chatInput.fill('Mark "Mark me done" as completed');
+    await chatInput.press('Enter');
+
+    // Wait for AI response
+    await expect(
+      page.locator('.chat-message.assistant').last()
+    ).toBeVisible({ timeout: 30000 });
+
+    // Todo should now be marked as completed
+    await expect(page.locator('.completed')).toBeVisible({ timeout: 10000 });
   });
 
   test('does not send empty messages (UC-U06, Alt 5a)', async ({

@@ -80,5 +80,12 @@ describe('Input Validation (UC-S11)', () => {
         'Completed must be a boolean'
       );
     });
+
+    it('rejects title over 500 characters', () => {
+      const longTitle = 'a'.repeat(501);
+      expect(() => validateUpdateTodo({ title: longTitle })).toThrow(
+        'Title must be 500 characters or less'
+      );
+    });
   });
 });

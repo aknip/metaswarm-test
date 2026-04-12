@@ -2,17 +2,20 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Hono } from 'hono';
 import Database from 'better-sqlite3';
 import { createDatabase } from '../db.js';
-import { todosRoutes } from '../routes/todos.js';
+import { todosRoutes, errorMessage } from '../routes/todos.js';
+import { SSEManager } from '../sse.js';
 
 describe('Todo Routes', () => {
   let app: Hono;
   let db: Database.Database;
+  let sseManager: SSEManager;
 
   beforeEach(() => {
     db = new Database(':memory:');
     createDatabase(db);
     app = new Hono();
-    todosRoutes(app, db);
+    sseManager = new SSEManager();
+    todosRoutes(app, db, sseManager);
   });
 
   describe('GET /api/todos (UC-S02)', () => {
@@ -73,6 +76,15 @@ describe('Todo Routes', () => {
       const body = await res.json();
       expect(body.error).toBe('Title must be 500 characters or less');
     });
+
+    it('returns 400 with fallback message for invalid JSON', async () => {
+      const res = await app.request('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'not valid json',
+      });
+      expect(res.status).toBe(400);
+    });
   });
 
   describe('PATCH /api/todos/:id (UC-S03)', () => {
@@ -120,6 +132,18 @@ describe('Todo Routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 400 with fallback message for invalid JSON', async () => {
+      const res = await app.request(
+        '/api/todos/00000000-0000-4000-8000-000000000000',
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: 'not valid json',
+        }
+      );
       expect(res.status).toBe(400);
     });
 
@@ -200,6 +224,18 @@ describe('Todo Routes', () => {
         { method: 'DELETE' }
       );
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('errorMessage helper', () => {
+    it('returns error message for Error instances', () => {
+      expect(errorMessage(new Error('test error'))).toBe('test error');
+    });
+
+    it('returns fallback for non-Error values', () => {
+      expect(errorMessage('string error')).toBe('Bad request');
+      expect(errorMessage(null)).toBe('Bad request');
+      expect(errorMessage(42)).toBe('Bad request');
     });
   });
 });

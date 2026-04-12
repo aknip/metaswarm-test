@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Todo } from '@shared/types.js';
+import type { Todo, SSEEvent } from '@shared/types.js';
 import {
   fetchTodos,
   toggleTodo as apiToggleTodo,
   updateTodo as apiUpdateTodo,
   deleteTodo as apiDeleteTodo,
 } from '../api/client.js';
+import { useSSE } from './useSSE.js';
 
 export function useTodos() {
   const [todos, setTodos] = useState<Todo[]>([]);
@@ -29,8 +30,32 @@ export function useTodos() {
     loadTodos();
   }, [loadTodos]);
 
+  const handleSSEEvent = useCallback((event: SSEEvent) => {
+    switch (event.type) {
+      case 'todo:created':
+        setTodos((prev) => {
+          if (prev.some((t) => t.id === event.data.id)) return prev;
+          return [...prev, event.data];
+        });
+        break;
+      case 'todo:updated':
+        setTodos((prev) =>
+          prev.map((t) => (t.id === event.data.id ? event.data : t))
+        );
+        break;
+      case 'todo:deleted':
+        setTodos((prev) => prev.filter((t) => t.id !== event.data.id));
+        break;
+    }
+  }, []);
+
+  useSSE(handleSSEEvent, loadTodos);
+
   const addTodo = useCallback((todo: Todo) => {
-    setTodos((prev) => [...prev, todo]);
+    setTodos((prev) => {
+      if (prev.some((t) => t.id === todo.id)) return prev;
+      return [...prev, todo];
+    });
   }, []);
 
   const toggleTodoItem = useCallback(async (id: string) => {

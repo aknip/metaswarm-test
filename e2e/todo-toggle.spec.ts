@@ -1,7 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Todo Toggle (UC-U05)', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, request }) => {
+    // Clean up all existing todos before each test
+    const res = await request.get('http://localhost:3000/api/todos');
+    const todos = (await res.json()) as { id: string }[];
+    for (const todo of todos) {
+      await request.delete(`http://localhost:3000/api/todos/${todo.id}`);
+    }
     await page.goto('/');
   });
 

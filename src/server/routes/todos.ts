@@ -8,8 +8,18 @@ import {
   deleteTodo,
 } from '../db.js';
 import { validateCreateTodo, validateUpdateTodo } from '../validation.js';
+import type { SSEManager } from '../sse.js';
 
-export function todosRoutes(app: Hono, db: Database.Database): void {
+export function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return 'Bad request';
+}
+
+export function todosRoutes(
+  app: Hono,
+  db: Database.Database,
+  sseManager: SSEManager
+): void {
   app.get('/api/todos', (c) => {
     const todos = getAllTodos(db);
     return c.json(todos);
@@ -20,10 +30,10 @@ export function todosRoutes(app: Hono, db: Database.Database): void {
       const body = await c.req.json();
       const { title } = validateCreateTodo(body);
       const todo = createTodo(db, title);
+      sseManager.broadcast('todo:created', todo);
       return c.json(todo, 201);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Bad request';
-      return c.json({ error: message }, 400);
+      return c.json({ error: errorMessage(e) }, 400);
     }
   });
 
@@ -34,6 +44,7 @@ export function todosRoutes(app: Hono, db: Database.Database): void {
     if (!todo) {
       return c.json({ error: 'Todo not found' }, 404);
     }
+    sseManager.broadcast('todo:updated', todo);
     return c.json(todo);
   });
 
@@ -46,10 +57,10 @@ export function todosRoutes(app: Hono, db: Database.Database): void {
       if (!todo) {
         return c.json({ error: 'Todo not found' }, 404);
       }
+      sseManager.broadcast('todo:updated', todo);
       return c.json(todo);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Bad request';
-      return c.json({ error: message }, 400);
+      return c.json({ error: errorMessage(e) }, 400);
     }
   });
 
@@ -59,6 +70,7 @@ export function todosRoutes(app: Hono, db: Database.Database): void {
     if (!deleted) {
       return c.json({ error: 'Todo not found' }, 404);
     }
+    sseManager.broadcast('todo:deleted', { id });
     return c.body(null, 204);
   });
 }

@@ -33,3 +33,6 @@ npm-debug.log*
 
 # Vite
 vite.config.ts.timestamp-*
+*.db-shm
+*.db-wal
+test-results/

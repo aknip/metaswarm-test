@@ -18,4 +18,52 @@ test.describe('Todo CRUD (UC-U01, UC-U02, UC-U03, UC-U04)', () => {
       page.getByRole('heading', { name: /todo \+ ai chat/i })
     ).toBeVisible();
   });
+
+  test('creates a todo by typing and pressing Enter (UC-U01, Main Flow)', async ({
+    page,
+  }) => {
+    const input = page.getByPlaceholder('Add a todo...');
+    await input.fill('Buy milk');
+    await input.press('Enter');
+    await expect(page.getByText('Buy milk')).toBeVisible();
+    await expect(input).toHaveValue('');
+  });
+
+  test('does not create todo with empty input (UC-U01, Alt 5a)', async ({
+    page,
+  }) => {
+    const todosBefore = await page.locator('.todo-list li').count();
+    const input = page.getByPlaceholder('Add a todo...');
+    await input.press('Enter');
+    // Verify no new todo was added
+    const todosAfter = await page.locator('.todo-list li').count();
+    expect(todosAfter).toBe(todosBefore);
+  });
+
+  test('edits a todo title by double-clicking (UC-U03, Main Flow)', async ({
+    page,
+  }) => {
+    const input = page.getByPlaceholder('Add a todo...');
+    await input.fill('Original title');
+    await input.press('Enter');
+    await expect(page.getByText('Original title')).toBeVisible();
+
+    await page.getByText('Original title').dblclick();
+    const editInput = page.locator('.edit-input');
+    await editInput.fill('Updated title');
+    await editInput.press('Enter');
+    await expect(page.getByText('Updated title')).toBeVisible();
+  });
+
+  test('deletes a todo by clicking the delete button (UC-U04, Main Flow)', async ({
+    page,
+  }) => {
+    const input = page.getByPlaceholder('Add a todo...');
+    await input.fill('To be deleted');
+    await input.press('Enter');
+    await expect(page.getByText('To be deleted')).toBeVisible();
+
+    await page.getByRole('button', { name: /delete to be deleted/i }).click();
+    await expect(page.getByText('To be deleted')).not.toBeVisible();
+  });
 });

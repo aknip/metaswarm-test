@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Full-stack TypeScript application: Hono backend, React + Vite frontend, SQLite database, SSE real-time updates, Claude SDK integration.
+Real-time todo list with AI chat. Full-stack TypeScript application: Hono backend, React + Vite frontend, SQLite database, SSE real-time sync, Claude SDK tool_use integration.
 
 ## Tech Stack
 
@@ -20,47 +20,54 @@ Full-stack TypeScript application: Hono backend, React + Vite frontend, SQLite d
 
 ```
 src/
-  server/        # Hono backend (routes, middleware, services)
-  client/        # React frontend (components, hooks, pages)
-  shared/        # Shared types and utilities
-  db/            # SQLite schema, migrations, queries
+  server/
+    db.ts          # SQLite database layer (factory + TodoRepo)
+    routes.ts      # REST CRUD routes with Zod validation
+    sse.ts         # SSE broadcast system
+    chat.ts        # AI chat with Claude tool_use loop
+    index.ts       # Server entry, CORS, route mounting
+    *.test.ts      # Tests (100% coverage enforced)
+  client/
+    App.tsx        # React app (TodoList + ChatPanel)
+    main.tsx       # Entry point
+    index.html     # HTML shell
+  shared/
+    types.ts       # Shared TypeScript types
 ```
 
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (Vite + Hono)
+npm run dev          # Start dev server (Vite + Hono via concurrently)
 npm run build        # Production build
 npm run test         # Run tests with Vitest
-npm run test:cov     # Run tests with coverage
+npm run test:cov     # Run tests with 100% coverage thresholds
 npm run lint         # ESLint check
 npm run format       # Prettier format
-npm run typecheck    # TypeScript type checking
+npm run typecheck    # TypeScript type checking (tsc --noEmit)
 ```
+
+## API Routes
+
+- `GET /api/todos` — list all todos
+- `GET /api/todos/:id` — get single todo
+- `POST /api/todos` — create todo `{ title: string }`
+- `PATCH /api/todos/:id` — update todo `{ title: string, completed: boolean }`
+- `DELETE /api/todos/:id` — delete todo
+- `GET /api/sse/events` — SSE stream (events: created, updated, deleted, ping)
+- `POST /api/chat/message` — AI chat `{ sessionId: string, message: string }`
 
 ## Development Guidelines
 
-- Write TypeScript strict mode — no `any` types without justification
-- All new code must have tests (80% coverage threshold)
-- Use ESM imports throughout (`import`/`export`, not `require`)
-- Backend routes go in `src/server/routes/`
-- React components are function components with hooks
-- SQLite queries use parameterized statements (never string interpolation)
-- SSE endpoints return `text/event-stream` content type
-- Claude SDK calls go through service layer in `src/server/services/`
-
-## Testing
-
-- Runner: Vitest
-- Coverage: v8 provider, 80% threshold
-- Run `npm test` before committing
-- Integration tests can use in-memory SQLite
+- TypeScript strict mode — no `any` without justification
+- 100% backend test coverage enforced via vitest thresholds
+- ESM imports throughout
+- SQLite queries use parameterized prepared statements
+- In-memory SQLite (`:memory:`) for test isolation
+- Claude SDK mock in tests — no real API calls
 
 ## Metaswarm
 
 This project uses metaswarm for quality-gated development:
-- `/metaswarm:start` — begin tracked work on a task
-- `/metaswarm:orchestrated-execution` — 4-phase execution loop
-- `/metaswarm:pr-shepherd` — monitor PRs through to merge
 - Config: `.metaswarm/project-profile.json`
 - Knowledge base: `.metaswarm/knowledge-base/`

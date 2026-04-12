@@ -1,8 +1,19 @@
 # Design: Real-Time Todo List with AI Chat
 
 **Date:** 2026-04-12
-**Status:** Draft
+**Status:** Approved (Round 2)
 **Branch:** v4-usecase-driven-3
+
+### Design Decisions & Constraints
+
+1. **Single-user app** — no authentication, no multi-user. Runs on localhost.
+2. **OpenRouter API** — replaces Anthropic SDK stated in initial CLAUDE.md. CLAUDE.md will be updated.
+3. **Coverage target: 100%** — overrides the 80% in .coverage-thresholds.json. Both CLAUDE.md and the threshold file will be updated during implementation.
+4. **Chat history is ephemeral** — deliberate MVP decision. Lost on page refresh. No persistence planned.
+5. **No undo for delete** — MVP trade-off. Immediate delete, no confirmation dialog.
+6. **SSE: no deduplication** — server broadcasts to ALL clients including originator. Client applies updates idempotently (React state replacement). No special dedup mechanism needed.
+7. **SSE reconnect: full state refetch** — no Last-Event-ID replay. Client fetches full todo list on reconnect.
+8. **Max chat history: 50 messages** — client caps conversation history sent to server to prevent context window overflow.
 
 ## 1. Overview
 
@@ -156,7 +167,7 @@ User views all existing todo items. The list shows title and completion status f
 - 5a. No todos exist: "No todos yet" empty state displayed
 - 5b. Server unreachable: Error message with retry option
 ##### 6. Special Requirements / Remarks
-- Todos ordered by creation time (newest last)
+- Todos ordered by creation time ascending (oldest first, newest at bottom — `created_at ASC`)
 
 ---
 
@@ -202,9 +213,9 @@ User permanently removes a todo item from the list.
 3. Todo is immediately removed from the list
 4. System deletes the todo from the database
 ##### 5. Alternative / Exception Flows
-- 5a. Todo already deleted (concurrent): Silently succeed (idempotent)
+- 5a. Todo already deleted (concurrent): 404 returned but UI handles gracefully (removes from list)
 ##### 6. Special Requirements / Remarks
-- No confirmation dialog (immediate delete)
+- No confirmation dialog (immediate delete) — MVP trade-off, may revisit
 - Delete is immediate — no undo
 
 ---
@@ -357,7 +368,7 @@ Changes to todos made in one tab are reflected in all other open tabs in real-ti
 - 5b. Event missed during disconnect: Full state fetch on reconnect ensures consistency
 ##### 6. Special Requirements / Remarks
 - SSE events: `todo:created`, `todo:updated`, `todo:deleted`
-- Client handles deduplication (ignore events for own actions)
+- No client-side deduplication needed: SSE events update state idempotently (full todo object replaces existing state). Originator tab receives the event and React reconciles without double-render.
 - Depends on: UC-S06, UC-S07
 
 ---
@@ -462,7 +473,7 @@ API endpoint to permanently delete a todo item.
 ##### 5. Alternative / Exception Flows
 - 5a. Todo not found: 404 `{ "error": "Todo not found" }`
 ##### 6. Special Requirements / Remarks
-- Idempotent: deleting non-existent todo returns 404 (not error)
+- Strict delete: returns 404 for non-existent todo (not idempotent). Client handles 404 gracefully.
 
 ---
 
@@ -487,7 +498,7 @@ API endpoint to toggle a todo's completion status. This is a convenience endpoin
 ##### 5. Alternative / Exception Flows
 - 5a. Todo not found: 404
 ##### 6. Special Requirements / Remarks
-- Atomic read-modify-write within a single SQL statement
+- Atomic read-modify-write via single SQL: `UPDATE todos SET completed = NOT completed, updated_at = datetime('now') WHERE id = ? RETURNING *`
 
 ---
 
@@ -510,8 +521,8 @@ SSE endpoint that clients connect to for real-time todo change notifications.
 5. When a todo changes, server sends event to all connected clients
 6. On client disconnect, server removes from active clients set
 ##### 5. Alternative / Exception Flows
-- 5a. Connection timeout: Client reconnects with `Last-Event-ID`
-- 5b. Server restart: All connections drop; clients reconnect automatically
+- 5a. Connection timeout: Client reconnects and fetches full state via GET /api/todos (no Last-Event-ID replay)
+- 5b. Server restart: All connections drop; clients reconnect and refetch full state
 ##### 6. Special Requirements / Remarks
 - Event format: `event: <type>\ndata: <json>\n\n`
 - Event types: `todo:created`, `todo:updated`, `todo:deleted`
@@ -805,6 +816,8 @@ e2e/
 #### Types
 
 ```typescript
+// === Shared types (src/shared/types.ts) — used by both client and server ===
+
 interface Todo {
   id: string;
   title: string;
@@ -813,28 +826,35 @@ interface Todo {
   updatedAt: string;
 }
 
+// Public chat message types (client <-> server API boundary)
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
 interface ChatRequest {
-  messages: ChatMessage[];
+  messages: ChatMessage[];  // Max 50 messages enforced by validation
 }
 
 interface ChatResponse {
-  response: string;
-  messages: ChatMessage[];
+  response: string;         // Final assistant text response
+  messages: ChatMessage[];  // Updated history (user + assistant only, no tool internals)
 }
 
-interface SSEEvent {
-  type: 'todo:created' | 'todo:updated' | 'todo:deleted';
-  data: Todo | { id: string };
-}
+// Discriminated union for SSE events — enables safe TypeScript narrowing
+type SSEEvent =
+  | { type: 'todo:created'; data: Todo }
+  | { type: 'todo:updated'; data: Todo }
+  | { type: 'todo:deleted'; data: { id: string } };
 
 interface ApiError {
   error: string;
 }
+
+// === Server-internal types (NOT shared) ===
+// Used within the AI tool-call loop only; never exposed to clients.
+// OpenRouter/OpenAI-compatible message roles include 'system', 'tool'.
+// These are defined in src/server/ai/openrouter.ts, not in shared types.
 ```
 
 ---
@@ -843,14 +863,17 @@ interface ApiError {
 
 Each slice is a fully runnable, user-testable increment. TDD within each: write failing tests first, then implement.
 
-### Slice 1: Foundation + View Empty Todo List
+### Slice 1: Foundation + View Empty Todo List + CI Pipeline
 **Use Cases:** UC-U02, UC-S02, UC-S10 (partial)
-**Goal:** App loads, shows empty todo list; backend serves empty array
+**Goal:** App loads, shows empty todo list; backend serves empty array; CI green from day one
 
 - Project scaffolding (package.json, tsconfig, vite.config, eslint, prettier)
+- **CI pipeline: .github/workflows/ci.yml** (typecheck -> lint -> format -> test -> build -> e2e)
 - SQLite database init with `todos` table
 - GET /api/todos returns `[]`
 - React app with TodoList showing "No todos yet"
+- Update CLAUDE.md: OpenRouter replaces Anthropic SDK, coverage target 100%
+- Update .coverage-thresholds.json to 100%
 - **Backend tests:** DB init, GET /api/todos returns empty array
 - **E2E tests:** App loads, shows empty state message
 
@@ -905,13 +928,14 @@ Each slice is a fully runnable, user-testable increment. TDD within each: write 
 - **Backend tests:** Chat endpoint, tool execution (mocked OpenRouter)
 - **E2E tests:** Send message, receive response, AI creates/modifies todo
 
-### Slice 7: CI Pipeline + Polish
+### Slice 7: Coverage Hardening + Polish
 **Use Cases:** All (quality assurance)
-**Goal:** GitHub Actions CI pipeline; coverage at 100%
+**Goal:** Ensure 100% coverage; fix any gaps; final quality pass
 
-- .github/workflows/ci.yml
-- Coverage thresholds set to 100%
-- Final test pass and coverage verification
+- Review and fill any coverage gaps across all test files
+- Verify all use case traceability comments are present
+- Final lint, format, typecheck, build verification
+- Production build test (vite build + tsc)
 
 ---
 
@@ -931,6 +955,30 @@ Every test references the use case it validates:
 | ai-tools.test.ts | UC-S09 |
 
 **Coverage target:** 100% lines, branches, functions, statements
+
+### 6.1.1 Mock Infrastructure
+
+**OpenRouter API mocking (chat.test.ts, ai-tools.test.ts):**
+- Use `vi.mock()` to mock the `openrouter.ts` module at the module boundary
+- Mock returns predefined responses: plain text, single tool_call, multi-tool chain, error
+- Test the max-iterations (5) limit explicitly: mock returns tool_calls on every iteration to trigger the cap
+- Test the 502 fallback: mock throws network error
+
+**Database (all backend tests):**
+- Each test file creates a fresh in-memory SQLite database (`:memory:`) via a `beforeEach` helper
+- No shared state between tests
+
+**SSE (sse.test.ts):**
+- Use mock `WritableStream` / response objects to simulate SSE connections
+- Test broadcast to multiple clients, dead connection cleanup
+
+**Test spec for max iterations (UC-S08, Alt 5d):**
+```typescript
+it('returns partial response when tool loop exceeds 5 iterations (UC-S08, Alt 5d)', async () => {
+  // Mock: AI always returns a tool_call, never a final text response
+  // Assert: after 5 iterations, response contains warning about max iterations
+});
+```
 
 ### 6.2 E2E Tests (Playwright)
 

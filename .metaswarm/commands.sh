@@ -1,21 +1,26 @@
 #!/usr/bin/env bash
-# metaswarm command shims — high-frequency project commands
+# metaswarm command shims for metaswarm-test
+# Source: .metaswarm/commands.sh
 
-# Testing
-alias mt="npm test"
-alias mtc="npm run test:cov"
-alias mtw="npm run test -- --watch"
+# Quality gates - run all checks in sequence
+quality-check() {
+  echo "Running quality gates..."
+  npm run typecheck && \
+  npm run lint && \
+  npm run format && \
+  npm test && \
+  npm run build
+  echo "Quality gates complete."
+}
 
-# Development
-alias md="npm run dev"
-alias mb="npm run build"
+# Full verification including E2E
+full-verify() {
+  quality-check && npm run test:e2e
+}
 
-# Quality
-alias ml="npm run lint"
-alias mf="npm run format"
-alias mtc="npm run typecheck"
-
-# Git shortcuts
-alias gs="git status"
-alias gd="git diff"
-alias gl="git log --oneline -20"
+# Development servers
+dev-all() {
+  echo "Start backend: npm run dev"
+  echo "Start frontend: npm run dev:client"
+  echo "(Run these in separate terminals)"
+}

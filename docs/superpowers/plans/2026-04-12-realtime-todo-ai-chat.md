@@ -124,8 +124,7 @@ Then overwrite with:
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
     "dev:client": "vite --config vite.config.ts",
-    "build": "vite build --config vite.config.ts && tsc -p tsconfig.node.json --noEmit",
-    "start": "node dist/server/index.js",
+    "build": "tsc --noEmit && vite build --config vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
@@ -142,13 +141,12 @@ Then overwrite with:
 
 ```bash
 # Production deps
-npm install hono @hono/node-server better-sqlite3
+npm install hono @hono/node-server better-sqlite3 react react-dom
 
 # Dev deps
 npm install -D typescript tsx vite @vitejs/plugin-react vitest @vitest/coverage-v8 \
   eslint @eslint/js typescript-eslint prettier eslint-config-prettier \
-  @playwright/test @types/better-sqlite3 @types/node \
-  react react-dom @types/react @types/react-dom
+  @playwright/test @types/better-sqlite3 @types/node @types/react @types/react-dom
 ```
 
 - [ ] **1.3: Install Playwright browsers**
@@ -381,6 +379,8 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
 - [ ] **2.9: Update CLAUDE.md and .coverage-thresholds.json**
@@ -2267,19 +2267,30 @@ import type { SSEManager } from '../sse.js';
 export function eventsRoutes(app: Hono, sseManager: SSEManager): void {
   app.get('/api/events', (c) => {
     return streamSSE(c, async (stream) => {
-      const clientId = sseManager.addClient({
-        write: (data: string) => {
-          stream.writeSSE({ data: '' });
-          // Write raw SSE data directly
-          stream.write(data);
+      // Register a writer that uses Hono's streamSSE writeSSE method
+      const writer = {
+        write: (rawMessage: string) => {
+          // Parse the raw SSE message to extract event type and data
+          const eventMatch = rawMessage.match(/^event: (.+)\n/);
+          const dataMatch = rawMessage.match(/^data: (.+)\n/m);
+          if (eventMatch && dataMatch) {
+            stream.writeSSE({
+              event: eventMatch[1],
+              data: dataMatch[1],
+            });
+          }
         },
-      } as unknown as WritableStreamDefaultWriter);
+      };
+
+      const clientId = sseManager.addClient(
+        writer as unknown as WritableStreamDefaultWriter
+      );
 
       stream.onAbort(() => {
         sseManager.removeClient(clientId);
       });
 
-      // Keep alive
+      // Keep-alive loop
       while (true) {
         await stream.writeSSE({ data: '', event: 'keepalive' });
         await stream.sleep(30000);
@@ -2288,8 +2299,6 @@ export function eventsRoutes(app: Hono, sseManager: SSEManager): void {
   });
 }
 ```
-
-Note: The SSE route implementation may need adjustment during implementation based on how Hono's `streamSSE` works. The key contract is: SSE headers are set, clients are registered, and events are forwarded.
 
 - [ ] **2.3: Wire SSE into todos routes**
 
@@ -2874,7 +2883,84 @@ export function validateChatMessages(
 }
 ```
 
-Note: These validators are implemented here because chat.ts imports them. Their unit tests are written in Task 7 (coverage hardening) to cover all branches. The chat.test.ts tests validate the integration.
+Note: These validators are needed by chat.ts. Their unit tests follow immediately in Step 2.0b (TDD — tests right after implementation, same task).
+
+- [ ] **2.0b: Write tests for validateChatMessages and validateUUID (TDD — implementation was 2.0a)**
+
+Add to `src/server/__tests__/validation.test.ts`:
+
+```typescript
+import { validateUUID, validateChatMessages } from '../validation.js';
+
+  describe('validateUUID (UC-S11)', () => {
+    it('accepts valid UUID v4', () => {
+      expect(validateUUID('550e8400-e29b-41d4-a716-446655440000')).toBe(
+        '550e8400-e29b-41d4-a716-446655440000'
+      );
+    });
+
+    it('rejects invalid UUID format', () => {
+      expect(() => validateUUID('not-a-uuid')).toThrow('Invalid ID format');
+    });
+  });
+
+  describe('validateChatMessages (UC-S11, for UC-S08)', () => {
+    it('accepts valid messages', () => {
+      const result = validateChatMessages({
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+      expect(result.messages).toHaveLength(1);
+    });
+
+    it('rejects missing messages field', () => {
+      expect(() => validateChatMessages({})).toThrow(
+        'Messages array is required'
+      );
+    });
+
+    it('rejects empty messages array', () => {
+      expect(() => validateChatMessages({ messages: [] })).toThrow(
+        'Messages array must not be empty'
+      );
+    });
+
+    it('rejects more than 50 messages', () => {
+      const messages = Array.from({ length: 51 }, (_, i) => ({
+        role: 'user',
+        content: `msg ${i}`,
+      }));
+      expect(() => validateChatMessages({ messages })).toThrow(
+        'Messages array must not exceed 50 messages'
+      );
+    });
+
+    it('rejects invalid role', () => {
+      expect(() =>
+        validateChatMessages({
+          messages: [{ role: 'system', content: 'hi' }],
+        })
+      ).toThrow('Invalid message role');
+    });
+
+    it('rejects empty content', () => {
+      expect(() =>
+        validateChatMessages({
+          messages: [{ role: 'user', content: '' }],
+        })
+      ).toThrow('Message content must be a non-empty string');
+    });
+
+    it('rejects non-string content', () => {
+      expect(() =>
+        validateChatMessages({
+          messages: [{ role: 'user', content: 123 }],
+        })
+      ).toThrow('Message content must be a non-empty string');
+    });
+  });
+```
+
+Run: `npm test` — Expected: PASS (validators implemented in 2.0a).
 
 - [ ] **2.1: Create src/server/ai/openrouter.ts**
 
@@ -3385,7 +3471,11 @@ Create `e2e/ai-chat.spec.ts`:
 import { test, expect } from '@playwright/test';
 
 test.describe('AI Chat (UC-U06, UC-U07, UC-U08, UC-U09)', () => {
+  // Skip AI tests if OPENROUTER_API_KEY is not set (e.g., in CI without secrets)
+  const hasApiKey = !!process.env.OPENROUTER_API_KEY;
+
   test.beforeEach(async ({ page }) => {
+    test.skip(!hasApiKey, 'OPENROUTER_API_KEY not set');
     await page.goto('/');
   });
 
@@ -3543,17 +3633,9 @@ Add tests for:
 - `deleteTodo` returns false for non-existent
 - `toggleTodo` returns undefined for non-existent
 
-- [ ] **2.2: Add missing validation.test.ts tests**
+- [ ] **2.2: Add any remaining validation.test.ts edge cases**
 
-Add tests for:
-- `validateUUID` with valid UUID
-- `validateUUID` with invalid format
-- `validateChatMessages` with valid messages
-- `validateChatMessages` with empty array
-- `validateChatMessages` with >50 messages
-- `validateChatMessages` with invalid role
-- `validateChatMessages` with empty content
-- `validateChatMessages` with missing messages field
+Review coverage report for validation.ts. The UUID and ChatMessages tests were added in Task 6. Add any remaining uncovered branches.
 
 - [ ] **2.3: Run coverage again and verify 100%**
 

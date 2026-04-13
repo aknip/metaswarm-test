@@ -22,8 +22,17 @@ Self-Improving Knowledge Base: Metaswarm maintains a JSONL knowledge base in you
 - Superpowers Plugin (optional, Claude Code only) 
 
 
+================================================================================
+
+## The workflow tested in this repo:
+
+- /metaswarm:setup "some notes about the tech stack"
+- /metaswarm:start-task "the app/feature/bugfix to implement" 
+- /metaswarm:self-reflect => saves learnings to .metaswarm/knowledge-base and Claude memory (project related)
 
 ================================================================================
+
+4 tests / versions in 4 branchens
 
 ## v1. Test in Claude:
 

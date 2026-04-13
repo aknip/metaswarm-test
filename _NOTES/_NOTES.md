@@ -30,9 +30,15 @@ Self-Improving Knowledge Base: Metaswarm maintains a JSONL knowledge base in you
 - /metaswarm:start-task "the app/feature/bugfix to implement" 
 - /metaswarm:self-reflect => saves learnings to .metaswarm/knowledge-base and Claude memory (project related)
 
+**Interruptions:**
+metaswarm has a SessionStart hook (hooks/session-start.sh) that automatically checks for interrupted
+executions at the beginning of every conversation. It calls bd prime and loads the context.
+
+/metaswarm:start-task is suitable for both starting and resuming work — not just for initial starts. The skill contains an explicit "Context Recovery Check".
+
 ================================================================================
 
-4 tests / versions in 4 branchens
+4 tests / versions in 4 branchens 
 
 ## v1. Test in Claude:
 
@@ -243,4 +249,71 @@ When all work units pass, create a PR.
 
 
 
+# How metaswarm Handles Interruptions                                                                                                      
 
+
+  Three Persistence Layers
+                                                                                                                            
+  metaswarm uses three layers to maintain state across sessions:
+                                                                                                                            
+  ┌─────────────────┬─────────────────┬───────────────────────────────────────────────┬─────────────────────────────┐     
+  │      Layer      │      Path       │                    Content                    │          Lifetime           │
+  ├─────────────────┼─────────────────┼───────────────────────────────────────────────┼─────────────────────────────┤
+  │ Project Config  │ .metaswarm/     │ project-profile.json, knowledge-base/facts.md │ Permanent, committed to git │
+  ├─────────────────┼─────────────────┼───────────────────────────────────────────────┼─────────────────────────────┤
+  │ Execution State │ .beads/context/ │ execution-state.md, project-context.md        │ Transient, until PR merge   │       
+  ├─────────────────┼─────────────────┼───────────────────────────────────────────────┼─────────────────────────────┤       
+  │ Plan            │ .beads/plans/   │ active-plan.md with status: in-progress       │ Transient, until PR merge   │       
+  └─────────────────┴─────────────────┴───────────────────────────────────────────────┴─────────────────────────────┘       
+                                     
+  Automatic Detection on Session Start
+
+  metaswarm has a SessionStart hook (hooks/session-start.sh) that automatically checks for interrupted executions at the    
+  beginning of every conversation. It calls bd prime and loads the context.
+                                                                                                                            
+  The Right Skill: /metaswarm:start-task                                                                                    
+   
+  /metaswarm:start-task is suitable for both starting and resuming work — not just for initial starts. The skill contains an
+   explicit "Context Recovery Check":
+                                                                                                                            
+  Pre-Task Checklist:                
+  - [ ] Check if .beads/plans/active-plan.md exists with status: in-progress
+  - [ ] If YES → Ask user: "There's an active plan from a previous session.
+        Resume it or start fresh?"                                                                                          
+        - Resume → bd prime --work-type recovery → pick up where stopped
+        - Start fresh → mark old plan as status: abandoned                                                                  
+                                     
+  What Happens on Interruption
+
+  State is written after every phase transition to execution-state.md:                                                      
+   
+  Session 1: Start → Plan → WU-1 done → WU-2 VALIDATE phase → Interruption                                                  
+     ↓ (written to .beads/)          
+  Session 2: SessionStart hook fires → bd prime --work-type recovery                                                        
+     ↓
+  User calls /start-task → "Resume or start fresh?"                                                                         
+     ↓                               
+  On Resume: Continue at WU-2, Phase VALIDATE (exactly where it left off)
+                                                                                                                            
+  Skill Differences
+                                                                                                                            
+  ┌───────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────┐
+  │               Skill               │                                     Purpose                                      │
+  ├───────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ /metaswarm:start-task             │ User-facing entry point — starts OR resumes work                                 │
+  ├───────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ /metaswarm:start                  │ Internal orchestration skill for agent-to-agent workflows                        │  
+  ├───────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ /metaswarm:prime                  │ Loads knowledge base facts into context (bd prime --work-type recovery for       │  
+  │                                   │ recovery)                                                                        │  
+  ├───────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────┤
+  │ /metaswarm:orchestrated-execution │ 4-phase loop per work unit (IMPLEMENT → VALIDATE → REVIEW → COMMIT)              │  
+  └───────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────┘
+
+  Summary
+
+  The answer to your question: /metaswarm:start-task is the correct skill for both — initial start and resumption. The skill
+   automatically detects an interrupted execution and asks whether you want to continue or start fresh. Additionally, the
+  SessionStart hook automatically primes the context.                                                                       
+                                     
+  There is no separate /metaswarm:resume — the recovery logic is built directly into /start-task.  
